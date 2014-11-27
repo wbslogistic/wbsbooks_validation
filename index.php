@@ -20,10 +20,10 @@ UpdateDatabase($sql);
 $sql = "SELECT * FROM Users WHERE userID = " . $userid;
 $sql_result = GetDatabaseRecords($sql);
 
-while($sql_row=mysql_fetch_array($sql_result))
+while($sql_row=pg_fetch_array($sql_result))
 {
-	$addPublisher = $sql_row['AddPublisher'];
-	$runStats = $sql_row['RunStats'];
+	$addPublisher = $sql_row['addpublisher'];
+	$runStats = $sql_row['runstats'];
 
 }
 

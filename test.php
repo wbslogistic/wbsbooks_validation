@@ -62,18 +62,15 @@ echo "</script>";
 
 function recordActivity()
     {
-        $now =date("d m Y H i s");
-        echo  "session_id";
-         echo "SESSION_ID".$_SESSION['session_id'];
-        $sql = "UPDATE usersessions SET lastactivity = to_timestamp('". $now."','DD MM YYYY') WHERE userhistoryid = ".$_SESSION['session_id'];
+
+        $sql = "UPDATE UserSessions SET LastActivity = current_timestamp WHERE UserHistoryID = '".$_SESSION['session_id']."'";
         UpdateDatabase($sql);
+
     }
 
 function UpdateDatabase($sql)
     {
           $connection = GetConnection();
-          echo "sql=".$sql;
-          echo " </br> Update database sql =".$sql;
            $sql_result=pg_query($connection,$sql)
         	or exit("Sql Error"+ pg_last_error($connection));
           pg_close($connection);        
@@ -88,7 +85,6 @@ function UpdateDatabase($sql)
  function GetDatabaseRecords($sql)   {
 // Performing SQL query
    $connection = GetConnection();
-   echo "</br> SQL=".$sql." </br>";
    $sql_result=pg_query($connection,$sql)
         	or exit("Sql Error"+ pg_last_error($connection));
     pg_close($connection);
@@ -98,16 +94,38 @@ function UpdateDatabase($sql)
 function InsertDatabaseRecord($sql)
     {
 		  $connection = GetConnection();
-          echo "insert query = ".$sql;
            $sql_result=pg_query($connection,$sql)
-          	or exit("Sql Error"+ pg_last_error($connection));
-          pg_close($connection);       
-          return $sql_result;
+        	or exit("Sql Error"+ pg_last_error($connection));
+          pg_close($connection);            
 }
 
 
 
  ?>
  
+<?php
+
+// Performing SQL query
+$query = 'SELECT * FROM authors limit 10';
+$result =GetDatabaseRecords($query);
+// Printing results in HTML
+echo "<table>\n";
+while ($line = pg_fetch_array($result, null, PGSQL_ASSOC)) {
+    echo "\t<tr>\n";
+    foreach ($line as $col_value) 
+    {
+        echo "\t\t<td>$col_value</td>\n";
+    }
+    echo "\t</tr>\n";
+}
+echo "</table>\n";
+
+// Free resultset
+pg_free_result($result);
+
+echo "ok";
+   $int_1  = intval(GetDatabaseRecords("select max(userhistoryid) as his_id from usersessions where userid=1123123")["his_id"]);
+echo $int_1+1
+?>
 
 

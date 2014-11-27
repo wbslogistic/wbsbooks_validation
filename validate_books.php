@@ -22,6 +22,7 @@ if (isset($_POST['validationType'])){
 
 
 
+
 $user = GetUsername();
 //
 // validation type a book??
@@ -84,7 +85,7 @@ if ($validationType == "book")
                 if ($a_ru!="")
                 {
                    $sql = "INSERT INTO Authors (AuthorRU, AuthorEN, Confirmed, ConfirmedBy, DateConfirmed) VALUES ('".$a_ru."','".$a_en."',1,'".$userid."',CURRENT_TIMESTAMP)";
-                   $a_id = InsertDatabaseRecord($sql);
+                   $a_id = InsertDatabaseRecord($sql);require_all 'helpers'
                 }
             }
             // loop round all ISBN's
