@@ -1,0 +1,15 @@
+1. Hello ,
+I was able to modify application to the client's needs but:
+
+1. Client says "Use normal rounding rules". The question is what will be
+ precision for rounding.
+Should it be 2 digits after comma or not ?
+
+2. How many digits should be shown to the user of the application: 
+a) Inside table for Optimal Fill Rate's field (10 elements) 
+b) OPTIMAL FILL "GENERAL" rate (in the top part of the view) ?
+
+3. If client choose to show 2 precision digits should such values as 21.99000 converted to 22 when we show it to user of the application to make it look better ?
+4. I have found that there are some layout problems when the cost is bigger then 1000 dollars, should I fix it or not ?
+And I need a little bit more time, because it was an enhancement rather than a bug.
+
