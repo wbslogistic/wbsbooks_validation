@@ -1,6 +1,7 @@
 <?php
+
 require_once("./include/functions.php");
-error_reporting(E_ALL ^ E_NOTICE);
+ error_reporting(E_ALL);
 
 
 if(!CheckLogin())
@@ -37,7 +38,7 @@ if ($validationType == "book")
 	// user selects the skip button -- so update the current record setting confirmed=TRUE, who confirmed it and when.
 	//
 	if ($actionType == "skip") {
-		$sql = "UPDATE Books SET Confirmed = -99, SessionID = '".$_SESSION['session_id']."' WHERE id = '".$id."'";
+		$sql = "UPDATE products SET Confirmed = -99, SessionID = '".$_SESSION['session_id']."' WHERE id = '".$id."'";
 		UpdateDatabase($sql);
 	} else {
             $t_ru = $_POST['TitleRU'];
@@ -45,7 +46,7 @@ if ($validationType == "book")
             $d_ru = $_POST['DescriptionRU'];
             $d_en = $_POST['DescriptionEN'];
             $publishers = $_POST['publishers'];
-            $a_id = $_POST['authorID'];
+            $a_id = $_POST['author_ID'];
             $a_ru = $_POST['authorRU'];
             $a_en = $_POST['authorEN'];
             $a_con = $_POST['authorConfirmed'];
@@ -66,17 +67,21 @@ if ($validationType == "book")
             //
             if ($a_id!="")
             {
-                  $sql = "SELECT * FROM Authors WHERE authorID = ".$a_id;
+                  $sql = "SELECT * FROM authors WHERE authorid = ".$a_id;
                   $sql_result = GetDatabaseRecords ( $sql );
-                  $sql_num=mysql_num_rows          ( $sql_result );
+                  $sql_num=pg_num_rows( $sql_result );
 
                   if ($sql_num > 0)
                   {
-                    $sql = "UPDATE Authors SET AuthorRU = '".$a_ru."', AuthorEN = '".$a_en."', Confirmed=1, ConfirmedBy='".$userid."', DateConfirmed=CURRENT_TIMESTAMP WHERE AuthorID = ".$a_id;
+                    $sql = "UPDATE Authors SET AuthorRU = '".$a_ru."', AuthorEN = '".$a_en."', Confirmed=1, ConfirmedBy='".$userid."', DateConfirmed=now()::timestamp WHERE AuthorID = ".$a_id;
                     UpdateDatabase($sql);
                   } else {
-                      $sql = "INSERT INTO Authors (AuthorRU, AuthorEN, Confirmed, ConfirmedBy, DateConfirmed) VALUES ('".$a_ru."','".$a_en."',1,'".$userid."',CURRENT_TIMESTAMP)";
-                      $a_id = InsertDatabaseRecord($sql);
+                      $sql = "INSERT INTO Authors (AuthorRU, AuthorEN, Confirmed, ConfirmedBy, DateConfirmed) VALUES ('".$a_ru."','".$a_en."',1,'".$userid."',now()::timestamp)";
+                       $a_id = InsertDatabaseRecord($sql);
+                      $sql =  "SELECT max(authorid) as id from Authors";
+                      $result_1 =GetDatabaseRecords($sql);
+                      $author_new_id =  pg_fetch_array($result_1);
+                      $a_id = $author_new_id["id"]; 
                   }
             } else {
                 //
@@ -84,8 +89,12 @@ if ($validationType == "book")
                 //
                 if ($a_ru!="")
                 {
-                   $sql = "INSERT INTO Authors (AuthorRU, AuthorEN, Confirmed, ConfirmedBy, DateConfirmed) VALUES ('".$a_ru."','".$a_en."',1,'".$userid."',CURRENT_TIMESTAMP)";
-                   $a_id = InsertDatabaseRecord($sql);require_all 'helpers'
+                      $sql = "INSERT INTO Authors (AuthorRU, AuthorEN, Confirmed, ConfirmedBy, DateConfirmed) VALUES ('".$a_ru."','".$a_en."',1,'".$userid."',now()::timestamp)";
+                      $a_id = InsertDatabaseRecord($sql); 
+                      $sql =  "SELECT max(authorid) as id from Authors";
+                      $result_1 =GetDatabaseRecords($sql);
+                      $author_new_id =  pg_fetch_array($result_1);
+                      $a_id = $author_new_id["id"]; 
                 }
             }
             // loop round all ISBN's
@@ -93,24 +102,24 @@ if ($validationType == "book")
                 //
                 // select books by book ID and ISBN.
                 //
-               $sql        = "SELECT * FROM BookISBNs WHERE bookID = ".$id." AND ISBN = '".trim($line)."'";
+               $sql     = "SELECT * FROM BookISBNs WHERE bookID = ".$id." AND ISBN = '".trim($line)."'";
                $sql_result = GetDatabaseRecords($sql);
-               $sql_num    = mysql_num_rows($sql_result);
+               $sql_num    = pg_num_rows($sql_result);
 		  // if found set confirmed flag for ISBN record.
                   if ($sql_num > 0)
                   {
-                        $sql = "UPDATE BookISBNs SET Confirmed = 1 WHERE bookID = ".$id." AND ISBN = '".trim($line)."'";
+                        $sql = "UPDATE BookISBNs SET Confirmed = 't' WHERE bookID = ".$id." AND ISBN = '".trim($line)."'";
                         UpdateDatabase($sql);
                   } else {
 			// otherwise create a new one.
-                        $sql = "INSERT INTO BookISBNs (bookID, ISBN, Source, Confirmed) VALUES (".$id.",'".trim($line)."','VALIDATION',1)";
+                        $sql = "INSERT INTO BookISBNs (bookID, ISBN, Source, Confirmed) VALUES (".$id.",'".trim($line)."','VALIDATION','t')";
                         $isbn_id = InsertDatabaseRecord($sql);
                   }
 
         }
 
 
-	$sql = "UPDATE BookTranslations SET dateLastEffective = CURDATE() WHERE bookID = " . $id . " AND dateLastEffective is null";
+	$sql = "UPDATE BookTranslations SET dateLastEffective = now()::timestamp WHERE bookID = " . $id . " AND dateLastEffective is null";
 	UpdateDatabase($sql);
 
 
@@ -128,20 +137,18 @@ if ($validationType == "book")
         // Update other books with the same titles
 
 	// Update matching Titles carry forward Descriptions
-	$sql = "UPDATE BookTranslations
-		INNER JOIN (
-			SELECT Books.id FROM Books
-			INNER JOIN (SELECT * FROM Books WHERE id = $id) 
-			AS ORIG ON Books.TitleRU like ORIG.TitleRU AND Books.id != ORIG.id) 
-		AS FindDuplicates ON BookTranslations.bookID = FindDuplicates.id
-		SET dateLastEffective = now() WHERE dateLastEffective is null;";
+	$sql = "UPDATE BookTranslations tr
+SET dateLastEffective = now()
+WHERE tr.dateLastEffective is null and tr.bookID in  (SELECT Books.id FROM products as Books INNER JOIN 
+    (SELECT * FROM products WHERE id = $id) AS ORIG ON Books.TitleRU
+     like ORIG.TitleRU AND Books.id != ORIG.id) or tr.bookID =$id";
 	UpdateDatabase($sql);
 
 	$sql = "INSERT INTO BookTranslations (bookID, TitleEN, DescriptionEN, dateConfirmed, dateLastEffective, ConfirmedBy, SyncCode)
-                SELECT t1.id, '$t_en', DescriptionEN, now(), null, $userid AS userID, 1 FROM Books AS t1
+                SELECT t1.id, '$t_en', DescriptionEN, now(), null, $userid AS userID, 1 FROM products AS t1
                                 INNER JOIN (
-                        SELECT Books.id FROM Books
-                        INNER JOIN (SELECT * FROM Books WHERE id = $id)
+                        SELECT Books.id FROM products  as Books
+                        INNER JOIN (SELECT * FROM products WHERE id = $id)
                         AS ORIG ON Books.TitleRU like ORIG.TitleRU AND Books.id != ORIG.id)
                 AS FindDuplicates ON t1.id = FindDuplicates.id
                                 LEFT JOIN
@@ -151,8 +158,8 @@ if ($validationType == "book")
                                         INNER JOIN (SELECT bookID, MAX(BookTranslationID) BookTranslationID FROM BookTranslations GROUP BY bookID) t3
                                                 ON t2.bookID = t3.bookID AND t2.BookTranslationID = t3.BookTranslationID
                                         INNER JOIN (
-                        SELECT Books.id FROM Books
-                        INNER JOIN (SELECT * FROM Books WHERE id = $id)
+                        SELECT Books.id FROM products as Books
+                        INNER JOIN (SELECT * FROM products WHERE id = $id)
                         AS ORIG ON Books.TitleRU like ORIG.TitleRU AND Books.id != ORIG.id)
                                         AS FindDuplicates ON t2.bookID = FindDuplicates.id
                                 ) as t4 ON t1.id = t4.bookID";
@@ -160,21 +167,19 @@ if ($validationType == "book")
 
 
 	// Update matching Descriptions carry forward Titles
-	$sql = "UPDATE BookTranslations
-		INNER JOIN (
-			SELECT Books.id FROM Books
-			INNER JOIN (SELECT * FROM Books WHERE id = $id) 
-			AS ORIG ON Books.DescriptionRU like ORIG.DescriptionRU AND Books.id != ORIG.id) 
-		AS FindDuplicates ON BookTranslations.bookID = FindDuplicates.id
-		SET dateLastEffective = now() WHERE dateLastEffective is null;";
+	$sql = "UPDATE BookTranslations tr
+SET dateLastEffective = now()
+WHERE tr.dateLastEffective is null and tr.bookID in  (SELECT Books.id FROM products as Books INNER JOIN 
+    (SELECT * FROM products WHERE id = $id) AS ORIG ON Books.TitleRU
+     like ORIG.TitleRU AND Books.id != ORIG.id) or tr.bookID =$id;";
 
 	UpdateDatabase($sql);
 
 	$sql = "INSERT INTO BookTranslations (bookID, TitleEN, DescriptionEN, dateConfirmed, dateLastEffective, ConfirmedBy, SyncCode)
-		SELECT t1.id, TitleEN, '$d_en' AS DescriptionEN, now(), null, $userid AS userID, 2 FROM Books AS t1
+		SELECT t1.id, TitleEN, '$d_en' AS DescriptionEN, now(), null, $userid AS userID, 2 FROM products AS t1
 				INNER JOIN (
-                        SELECT Books.id FROM Books
-                        INNER JOIN (SELECT * FROM Books WHERE id = $id)
+                        SELECT Books.id FROM products as Books
+                        INNER JOIN (SELECT * FROM products WHERE id = $id)
                         AS ORIG ON Books.DescriptionRU like ORIG.DescriptionRU AND Books.id != ORIG.id)
                 AS FindDuplicates ON t1.id = FindDuplicates.id
 				LEFT JOIN 
@@ -184,8 +189,8 @@ if ($validationType == "book")
 					INNER JOIN (SELECT bookID, MAX(BookTranslationID) BookTranslationID FROM BookTranslations GROUP BY bookID) t3
 						ON t2.bookID = t3.bookID AND t2.BookTranslationID = t3.BookTranslationID
 					INNER JOIN (
-                        SELECT Books.id FROM Books
-                        INNER JOIN (SELECT * FROM Books WHERE id = $id)
+                        SELECT Books.id FROM products as Books
+                        INNER JOIN (SELECT * FROM products WHERE id = $id)
                         AS ORIG ON Books.DescriptionRU like ORIG.DescriptionRU AND Books.id != ORIG.id)
 					AS FindDuplicates ON t2.bookID = FindDuplicates.id
 				) as t4 ON t1.id = t4.bookID";
@@ -202,7 +207,7 @@ if ($validationType == "book")
             }
 
 
-	$sql = "UPDATE Books SET Author = '" . $a_id . "', SessionID = '".$_SESSION['session_id']."', Confirmed = 1 WHERE id = '".$id."'";
+	$sql = "UPDATE products Books SET Author_id = ". $a_id .", SessionID = '".$_SESSION['session_id']."', Confirmed = 1 WHERE id = ".$id;
 	UpdateDatabase($sql);
 
         $sql = "UPDATE UserViews SET Validated = 1 WHERE UserViewsID = ".$userviewsid;
@@ -236,7 +241,8 @@ if (isset($_GET['bookid'])){
                         99
                 END AS OrderList
         , CASE WHEN T2.idSuggestedTitlesListItems is null THEN 0 ELSE 1 END AS SuggList
-	FROM Books AS T1
+	FROM products AS T1
+	FROM products AS T1
         LEFT JOIN SuggestedTitlesListItems AS T2 ON T1.id = T2.bookID
         LEFT JOIN ozon.ozon_book_categories AS O1 ON T1.ozon_id = O1.id
         LEFT JOIN ozon.ozon_categories AS C1 ON O1.category_id = C1.id
@@ -256,44 +262,49 @@ if (isset($_GET['bookid'])){
 			99
 		END AS OrderList
         , CASE WHEN T2.idSuggestedTitlesListItems is null THEN 0 ELSE 1 END AS SuggList
-        FROM Books AS T1
+        FROM products AS T1
         LEFT JOIN SuggestedTitlesListItems AS T2 ON T1.id = T2.bookID
-	LEFT JOIN ozon.ozon_book_categories AS O1 ON T1.ozon_id = O1.id
-	LEFT JOIN ozon.ozon_categories AS C1 ON O1.category_id = C1.id
+	LEFT JOIN ozon_prod_caty_rel AS O1 ON T1.ozon_id = O1.book_id
+	LEFT JOIN categories AS C1 ON O1.category_id = C1.self_id
 	LEFT JOIN BookLock AS BL ON T1.id = BL.bookID
         WHERE BL.idBookLock is null AND T1.TitleRU is not null
-        AND T1.confirmed=0 AND T1.TitleRU != '' AND T1.DescriptionRU is not null AND T1.DescriptionRU != ''
-        ORDER BY OrderList, T1.Year DESC, RAND()
+        AND (T1.confirmed=0  or  T1.confirmed is null) AND T1.TitleRU != '' AND T1.DescriptionRU is not null AND T1.DescriptionRU != ''
+        ORDER BY OrderList, T1.Year DESC, random()
         LIMIT 1";
 
 }
+
+     
 $sql_result = GetDatabaseRecords($sql);
-$sql_num=mysql_num_rows($sql_result);
+///$sql_num=mysql_num_rows($sql_result);
+  $sql_num=pg_num_rows($sql_result);
 
+   
 
+ //$sql_row=pg_fetch_array($result);
 // get book data....
-while($sql_row=mysql_fetch_array($sql_result))
+while($sql_row=pg_fetch_array($sql_result))
 {
         //$id=$sql_row["bookID"];
         $id   = $sql_row["id"];
-        $t_en = $sql_row["titleRU"];
-        $t_ru = htmlspecialchars($sql_row["titleRU"]);
-        $d_ru = $sql_row["descriptionRU"];
-        $d_en = $sql_row["descriptionRU"];
+        $t_en = $sql_row["titleru"];
+        $t_ru = htmlspecialchars($sql_row["titleru"]);
+        $d_ru = $sql_row["descriptionru"];
+        $d_en = $sql_row["descriptionru"];
         $barcode=$sql_row["barcode"];
-        $publisherID=$sql_row["Publisher"];
-        $publisherName=$sql_row["Publisher"];
-        $author=$sql_row["Author"];
-        $year=$sql_row["Year"];
+        $publisherID=$sql_row["publisher"];
+        $publisherName=$sql_row["publisher"];
+        $author=$sql_row["author_id"];
+        $year=$sql_row["year"];
         $source_id=$sql_row["source_id"];
         $ozon_id=$sql_row["ozon_id"];
-	$priority=$sql_row["OrderList"];
-	$confirmed=$sql_row["Confirmed"];
+	$priority=$sql_row["orderlist"];
+	$confirmed=$sql_row["confirmed"];
 	//$image_url=$sql_row["ImageID"] . '.jpg';
-	$image_url=$sql_row["ImageURL"] ;
+	$image_url=$sql_row["imageurl"] ;
 	if ( strstr($image_url,".jpg") == false ) { $image_url .=".jpg"; }
 //echo $image_url;
-	$suggList=$sql_row["SuggList"];
+	$suggList=$sql_row["sugglist"];
 }
 
 if ($id=="")
@@ -306,8 +317,11 @@ if ($id=="")
 
 InsertDatabaseRecord("INSERT INTO BookLock (bookID, userID) VALUES ('".$id."', '".$userid."')");
 // update record of who isviewing the book....
-$userviewsid = InsertDatabaseRecord("INSERT INTO UserViews (userid, sessionID, bookID, DateViewed, Validated) VALUES ('".$userid."','".$_SESSION['session_id']."','".$id."',CURRENT_TIMESTAMP,0)");
-
+ InsertDatabaseRecord("INSERT INTO UserViews (userid, sessionID, bookID, DateViewed, Validated) VALUES ('".$userid."','".$_SESSION['session_id']."','".$id."',now()::timestamp,0)");
+          $sql =  "SELECT max(userviewsid) as id from UserViews";
+          $result_1 =GetDatabaseRecords($sql);
+          $userviewsid_new_id =  pg_fetch_array($result_1);
+          $userviewsid  = $userviewsid_new_id["id"]; 
 
 //
 // get Title , Description etc from the translations table
@@ -316,10 +330,15 @@ $userviewsid = InsertDatabaseRecord("INSERT INTO UserViews (userid, sessionID, b
 $sql = "select * from BookTranslations where bookID = " . $id . " and dateLastEffective is null LIMIT 1";
 // .. FILL IN BLANKS to get english translation text to display in 2nd box
 $sql_result = GetDatabaseRecords($sql);
-$sql_num=mysql_num_rows($sql_result);
+
+  $sql_num=pg_num_rows($sql_result);
+//$sql_num=mysql_num_rows($sql_result);
 // get book data....
+
+ //$sql_row=pg_fetch_array($result);
 if ( $sql_num != 0 ) {
-	while($sql_row=mysql_fetch_array($sql_result))
+//	while($sql_row=mysql_fetch_array($sql_result))
+	while($sql_row=pg_fetch_array($sql_result))
 	{
         	$t_en= htmlspecialchars($sql_row["TitleEN"]);
 		$d_en =$sql_row["DescriptionEN"];
@@ -336,7 +355,7 @@ else
 // get the publisher(s) for this book.
 $sql="SELECT PublisherID FROM BookPublishers WHERE bookID=".$id;
 $result = GetDatabaseRecords($sql);
-$selected_publishers=mysql_fetch_array($result);
+$selected_publishers=pg_fetch_array($result);
 // get list of publishers.
 $sql="SELECT PublisherID, PublisherNameRU, PublisherNameEN FROM PublisherList ORDER BY PublisherNameRU";
 $result = GetDatabaseRecords($sql);
@@ -344,15 +363,15 @@ $result = GetDatabaseRecords($sql);
 
 // loop round the publishers list -- make up a drop down list.
 $options="";
-while ($row=mysql_fetch_array($result)) {
-    $pub_id=$row["PublisherID"];
-    $pub_name=$row["PublisherNameRU"];
-    $pub_name_EN=$row["PublisherNameEN"];
+while ($row=pg_fetch_array($result)) {
+    $pub_id=$row[strtolower("Publisherid")];
+    $pub_name=$row[strtolower("Publishernameru")];
+    $pub_name_EN=$row[strtolower("PublisherNameEN")];
     $wt1 = $row["weight"];
 
     $sql = "SELECT PublisherID FROM BookPublishers WHERE bookID=".$id." AND PublisherID=".$pub_id;
     $sql_result = GetDatabaseRecords($sql);
-    $sql_num=mysql_num_rows($sql_result);
+    $sql_num=pg_num_rows($sql_result);
 
 	if ($sql_num > 0)
 	{
@@ -366,18 +385,18 @@ while ($row=mysql_fetch_array($result)) {
 $sql="SELECT DISTINCT ISBN FROM BookISBNs WHERE bookID = ".$id." ORDER BY ISBN";
 $result = GetDatabaseRecords($sql);
 $isbn="";
-while ($row=mysql_fetch_array($result)) {
-    $isbn_text=$row["ISBN"];
+while ($row=pg_fetch_array($result)) {
+    $isbn_text=$row[ strtolower("ISBN")];
     $isbn.=$isbn_text."\r";
 }
 
 // get author data for author id.
 if ($author!="")
 {
-    $sql = "SELECT * FROM Authors WHERE AuthorID=".$author;
+    $sql = "SELECT * FROM Authors WHERE Author_ID=".$author;
     $result = GetDatabaseRecords($sql);
 
-    while($sql_row=mysql_fetch_array($result))
+    while($sql_row=pg_fetch_array($result))
     {
         $a_confirmed=$sql_row["Confirmed"];
 	$a_ru=$sql_row["authorRU"];
@@ -572,7 +591,7 @@ $image= "http://" . $host . "/product_images/" . $image_url;
 								<tr><td>Russian Text</td><td><textarea rows="4" cols="55" name="authorRU" <?= $a_confirmed==1 ? 'readonly' : '' ?> ><?= $a_ru ?></textarea></td></tr>
 								<tr><td>English Text</td><td><textarea rows="4" cols="55" name="authorEN" <?= $a_confirmed==1 ? 'readonly' : '' ?> ><?= $a_en ?></textarea></td></tr>
 								<tr><td>Weight:</td><td><textarea rows="1" cols="8" name="weight1" <?= $wt1==1 ? 'readonly' : '' ?> ><?= $wt1 ?></textarea></td></tr>
-								<tr><td>Confirmed</td><td align=left><input type=hidden name="authorID" value="<?= $author ?>"><input type=checkbox name="authorConfirmed" <?= $a_confirmed==1 ? 'checked disabled' : '' ?> ></td></tr>
+								<tr><td>Confirmed</td><td align=left><input type=hidden name="author_ID" value="<?= $author ?>"><input type=checkbox name="authorConfirmed" <?= $a_confirmed==1 ? 'checked disabled' : '' ?> ></td></tr>
 								<tr><td></td><td><input type=button value="Invalid Validation" onClick="revalidate_Author()"></td></tr>
 							</table>
 							</center>
@@ -603,19 +622,19 @@ $image= "http://" . $host . "/product_images/" . $image_url;
 
 
 
-$sql = "SELECT count(*) as noConfirmed FROM Books WHERE Confirmed=1 ";
+$sql = "SELECT count(*) as noConfirmed FROM products WHERE Confirmed=1 ";
     $result = GetDatabaseRecords($sql);
 
-    while($sql_row=mysql_fetch_array($result))
+    while($sql_row=pg_fetch_array($result))
     {
         $books_confirmed=$sql_row["noConfirmed"];
     }
 
 
-$sql = "SELECT count(*) as noConfirmed FROM Books WHERE Confirmed = 0 ";
+$sql = "SELECT count(*) as noConfirmed FROM products WHERE Confirmed = 0 ";
     $result = GetDatabaseRecords($sql);
 
-    while($sql_row=mysql_fetch_array($result))
+    while($sql_row=pg_fetch_array($result))
     {
         $books_remaining=$sql_row["noConfirmed"];
     }
@@ -636,13 +655,13 @@ SELECT userID, COUNT(id) AS NoBooks,
 		LoginDate
         FROM UserSessions
         INNER JOIN Books ON UserSessions.UserHistoryID = Books.SessionID
-        WHERE userID = ".$userid." AND LoginDate > CURDATE() AND Books.Confirmed = 1
+        WHERE userID = ".$userid." AND LoginDate > now()::timestamp AND Books.Confirmed = 1
         GROUP BY userHistoryID, userID
 ) AS TimeWorked
 GROUP BY userID";
 $result = GetDatabaseRecords($sql);
 
-    while($sql_row=mysql_fetch_array($result))
+    while($sql_row=pg_fetch_array($result))
     {
         $no_books=$sql_row["TotalBooks"];
         $hourly_avg=$sql_row["Daily_AveragePerHour"];

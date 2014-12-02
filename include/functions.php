@@ -54,7 +54,7 @@ echo "</script>";
     }
  function GetConnection()
  {
-     $connection = "dbname=books user=postgres password=s host=localhost port=5432";
+     $connection = "dbname=postgres user=postgres password=s host=localhost port=5432";
         $dbconn = pg_connect($connection)
     or die('Could not connect: ' . pg_last_error());
     return  $dbconn ;
