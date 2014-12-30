@@ -3,14 +3,13 @@
 require_once("./include/functions.php");
  error_reporting(E_ALL);
 
-
 if(!CheckLogin())
 {
     RedirectToURL("login.php");
     exit;
 }
 recordActivity();
-session_start();
+//session_start(); fix: session should eb
 $userid   = $_SESSION['user_id'];
 $username = $_SESSION['user_name'];
 //
@@ -28,8 +27,10 @@ $user = GetUsername();
 //
 // validation type a book??
 //
+
 if ($validationType == "book")
 {
+    $book_validated = 'true';
 	if (isset($_POST['actionType'])){
 	    $actionType = $_POST['actionType'];
 	}
@@ -46,6 +47,7 @@ if ($validationType == "book")
             $d_ru = $_POST['DescriptionRU'];
             $d_en = $_POST['DescriptionEN'];
             $publishers = $_POST['publishers'];
+             
             $a_id = $_POST['author_ID'];
             $a_ru = $_POST['authorRU'];
             $a_en = $_POST['authorEN'];
@@ -172,19 +174,15 @@ SET dateLastEffective = now()
 WHERE tr.dateLastEffective is null and tr.bookID in  (SELECT Books.id FROM products as Books INNER JOIN 
     (SELECT * FROM products WHERE id = $id) AS ORIG ON Books.TitleRU
      like ORIG.TitleRU AND Books.id != ORIG.id) or tr.bookID =$id;";
-
 	UpdateDatabase($sql);
-
 	$sql = "INSERT INTO BookTranslations (bookID, TitleEN, DescriptionEN, dateConfirmed, dateLastEffective, ConfirmedBy, SyncCode)
 		SELECT t1.id, TitleEN, '$d_en' AS DescriptionEN, now(), null, $userid AS userID, 2 FROM products AS t1
-				INNER JOIN (
-                        SELECT Books.id FROM products as Books
+				INNER JOIN (  SELECT Books.id FROM products as Books
                         INNER JOIN (SELECT * FROM products WHERE id = $id)
                         AS ORIG ON Books.DescriptionRU like ORIG.DescriptionRU AND Books.id != ORIG.id)
                 AS FindDuplicates ON t1.id = FindDuplicates.id
 				LEFT JOIN 
-				(
-					SELECT t2.* FROM
+				(	SELECT t2.* FROM
 					BookTranslations t2
 					INNER JOIN (SELECT bookID, MAX(BookTranslationID) BookTranslationID FROM BookTranslations GROUP BY bookID) t3
 						ON t2.bookID = t3.bookID AND t2.BookTranslationID = t3.BookTranslationID
@@ -194,20 +192,21 @@ WHERE tr.dateLastEffective is null and tr.bookID in  (SELECT Books.id FROM produ
                         AS ORIG ON Books.DescriptionRU like ORIG.DescriptionRU AND Books.id != ORIG.id)
 					AS FindDuplicates ON t2.bookID = FindDuplicates.id
 				) as t4 ON t1.id = t4.bookID";
-
 	UpdateDatabase($sql);
 
 
 
         $sql = "DELETE FROM BookPublishers WHERE bookID = '".$id."'";
         UpdateDatabase($sql);
-            foreach ($publishers as $pub){
-                $sql = "INSERT INTO BookPublishers (bookID, PublisherID) VALUES ('".$id."','".$pub."')";
+        
+        echo "PUBLISHERS 1=".$publishers;
+        //TODO: In future several publisher will have to be added. In the old structure it was not working at all 
+                $sql = "INSERT INTO BookPublishers (bookID, PublisherID) VALUES ('".$id."','".$publishers."')";
                 UpdateDatabase($sql);
-            }
-
-
-	$sql = "UPDATE products Books SET Author_id = ". $a_id .", SessionID = '".$_SESSION['session_id']."', Confirmed = 1 WHERE id = ".$id;
+           ///    foreach ($publishers as $pub){
+           // }
+       
+	$sql = "UPDATE products SET author_id = ". $a_id .", SessionID = '".$_SESSION['session_id']."', Confirmed = 1 WHERE id = ".$id;
 	UpdateDatabase($sql);
 
         $sql = "UPDATE UserViews SET Validated = 1 WHERE UserViewsID = ".$userviewsid;
@@ -412,6 +411,13 @@ if ($author!="")
 $host = $_SERVER['HTTP_HOST'];
 $image= "http://" . $host . "/product_images/" . $image_url;
 
+$content_r = '';
+if ($suggList == 1)
+	{
+	$content_r=	 "<p><strong>SUGGESTED LIST</strong></p>";
+	} else {
+	$content_r=	 "<p><strong>CATEGORY PRIORITY : ".$priority."</strong></p>";
+	}
 ?>
 <!DOCTYPE html>
 <html>
@@ -498,6 +504,8 @@ $image= "http://" . $host . "/product_images/" . $image_url;
 
 </head>
 <body>
+
+ <?= "PUBLISHER= ".$publishers ?>
 <center>
 <table border=0 cellspacing=30>
 
@@ -505,15 +513,9 @@ $image= "http://" . $host . "/product_images/" . $image_url;
 <td valign=top>
 
 <p><img src=<?= $image ?> width=200px></p>
-<?
-
-	if ($suggList == 1)
-	{
-		echo "<p><strong>SUGGESTED LIST</strong></p>";
-	} else {
-		echo "<p><strong>CATEGORY PRIORITY : ".$priority."</strong></p>";
-	}
-?>
+<div>
+<?=	$content_r ?>
+</div>
 <p><?= $id ?></p>
 </td>
 
@@ -541,7 +543,7 @@ $image= "http://" . $host . "/product_images/" . $image_url;
 				    <tr><td width=550>
 <div class="ui-widget">
 	<label>Select Publisher: </label>
-	<select id="combobox">
+	<select id="combobox" name="publishers">
 		<option value=-1>Select one...</option>
 		<?=$combo?>
 	</select>
