@@ -69,6 +69,9 @@ while($sql_row=pg_fetch_array($sql_result))
 		<tr><td colspan=2><hr></td></tr>
 		<tr><td>Validation of Books</td><td><input type=button style="height: 25px; width: 100px" onClick="window.location.href='validate_books.php'" value="Click Here"></td></tr>
 		<tr><td colspan=2><hr></td></tr>
+        		<tr><td colspan=2><hr></td></tr>
+		<tr><td>Category translation</td><td><input type=button style="height: 25px; width: 100px" onClick="window.location.href='category_list.php'" value="Click Here"></td></tr>
+		<tr><td colspan=2><hr></td></tr>
 		<tr><td colspan=2><input type=button style="height: 25px; width: 100px" onClick="window.location.href='logoff.php'" value="Log Off"></td></tr>
 	</table>
 	<center>

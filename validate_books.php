@@ -1,7 +1,7 @@
 <?php
 
 require_once("./include/functions.php");
- error_reporting(E_ALL);
+ //error_reporting(E_ALL);
 
 if(!CheckLogin())
 {
@@ -199,8 +199,7 @@ WHERE tr.dateLastEffective is null and tr.bookID in  (SELECT Books.id FROM produ
         $sql = "DELETE FROM BookPublishers WHERE bookID = '".$id."'";
         UpdateDatabase($sql);
         
-        echo "PUBLISHERS 1=".$publishers;
-        //TODO: In future several publisher will have to be added. In the old structure it was not working at all 
+                //TODO: In future several publisher will have to be added. In the old structure it was not working at all 
                 $sql = "INSERT INTO BookPublishers (bookID, PublisherID) VALUES ('".$id."','".$publishers."')";
                 UpdateDatabase($sql);
            ///    foreach ($publishers as $pub){
@@ -299,10 +298,7 @@ while($sql_row=pg_fetch_array($sql_result))
         $ozon_id=$sql_row["ozon_id"];
 	$priority=$sql_row["orderlist"];
 	$confirmed=$sql_row["confirmed"];
-	//$image_url=$sql_row["ImageID"] . '.jpg';
-	$image_url=$sql_row["imageurl"] ;
-	if ( strstr($image_url,".jpg") == false ) { $image_url .=".jpg"; }
-//echo $image_url;
+	$image_url=$sql_row["image"];
 	$suggList=$sql_row["sugglist"];
 }
 
@@ -426,8 +422,8 @@ if ($suggList == 1)
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <link href="style/style.css" rel="stylesheet" type="text/css">
 <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css" />
-<script src="http://code.jquery.com/jquery-1.9.1.js"></script>
-<script src="http://code.jquery.com/ui/1.10.3/jquery-ui.js"></script>
+<script src="http://localhost/php_books/js/jquery.js"></script>
+<script src="http://localhost/php_books/js/query-ui.js"></script>
 <script src="js/combo.js"></script>
 <script src="js/tabs_old.js"></script>
 
@@ -505,14 +501,13 @@ if ($suggList == 1)
 </head>
 <body>
 
- <?= "PUBLISHER= ".$publishers ?>
-<center>
+ <center>
 <table border=0 cellspacing=30>
 
 <tr>
 <td valign=top>
 
-<p><img src=<?= $image ?> width=200px></p>
+<p><img src=<?= $image_url ?> width=200px></p>
 <div>
 <?=	$content_r ?>
 </div>
